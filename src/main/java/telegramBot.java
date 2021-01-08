@@ -9,10 +9,11 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import javax.jms.*;
 import java.io.Serializable;
+import java.util.UUID;
 
-public class telegramBot extends TelegramLongPollingBot {
+public class telegramBot extends TelegramLongPollingBot  {
 
-    ConnectionFactory factory = new ActiveMQConnectionFactory("tcp://" + "127.0.0.1" + ":" + "61616", "artemis", "simetraehcapa");
+    public static ConnectionFactory factory = new ActiveMQConnectionFactory("tcp://" + "127.0.0.1" + ":" + "61616", "artemis", "simetraehcapa");
     String keyword;
     Boolean twitter=false;
     //Boolean reddit=false;
@@ -33,7 +34,7 @@ public class telegramBot extends TelegramLongPollingBot {
 
     public void onUpdateReceived(Update update) {
         String input = update.getMessage().getText();
-        if(input.equals("hello")) {
+        if(input.equalsIgnoreCase("hello")) {
             SendMessage choiceofPlatform = new SendMessage();
             choiceofPlatform.setText("Choose the platform to extract data from :\n 1. Twitter \n 2. Reddit \n 3. General");
             choiceofPlatform.setChatId(String.valueOf(update.getMessage().getChatId()));
@@ -50,14 +51,23 @@ public class telegramBot extends TelegramLongPollingBot {
             if(!general) {
 
                 try (Connection connection = factory.createConnection()) {
+                    UUID uuid = UUID.randomUUID();
+
                     Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
                     Destination destination = session.createQueue("eap.input");
                     MessageProducer producer = session.createProducer(destination);
                     MapMessage message = session.createMapMessage();
                     message.setString("latest_posts_user", reddit_username);
                     message.setStringProperty("type","reddit");
+                    message.setStringProperty("messageID",uuid.toString());
                     producer.send(message);
                     System.out.println("reached");
+                    Destination result_destination = session.createQueue("eap.output");
+                    MessageConsumer consumer = session.createConsumer(result_destination);
+                    connection.start();
+                    MapMessage result_message = (MapMessage)consumer.receive();
+                    session.close();
+                    System.out.println(result_message.getString("sentiment"));
 
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -84,15 +94,23 @@ public class telegramBot extends TelegramLongPollingBot {
             reddit_sub=false;
             if(!general) {
                 try (Connection connection = factory.createConnection()) {
+                    UUID uuid = UUID.randomUUID();
                     Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
                     Destination destination = session.createQueue("eap.input");
                     MessageProducer producer = session.createProducer(destination);
                     MapMessage message = session.createMapMessage();
                     message.setString("latest_posts_subreddit", reddit_subreddit);
                     message.setStringProperty("type","reddit");
+                    message.setStringProperty("messageID",uuid.toString());
                     producer.send(message);
                     System.out.println("reached");
                     reddit_sub = false;
+                    Destination result_destination = session.createQueue("eap.output");
+                    MessageConsumer consumer = session.createConsumer(result_destination);
+                    connection.start();
+                    MapMessage result_message = (MapMessage)consumer.receive();
+                    session.close();
+                    System.out.println(result_message.getString("sentiment"));
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -115,15 +133,24 @@ public class telegramBot extends TelegramLongPollingBot {
         else if(twitter){
             if(!general) {
                 try (Connection connection = factory.createConnection()) {
+                    UUID uuid = UUID.randomUUID();
                     Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
                     Destination destination = session.createQueue("eap.input");
                     MessageProducer producer = session.createProducer(destination);
                     MapMessage message = session.createMapMessage();
                     message.setString("latest_posts_user", input);
                    message.setStringProperty("type","twitter");
+                    message.setStringProperty("messageID",uuid.toString());
                     producer.send(message);
                     System.out.println("reached");
                     twitter = false;
+                    Destination result_destination = session.createQueue("eap.output");
+                    MessageConsumer consumer = session.createConsumer(result_destination);
+                    connection.start();
+                    MapMessage result_message = (MapMessage)consumer.receive();
+                    session.close();
+
+                    System.out.println(result_message.getString("sentiment"));
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -131,13 +158,16 @@ public class telegramBot extends TelegramLongPollingBot {
             }
             else{
                     try (Connection connection = factory.createConnection()) {
+                            UUID uuid = UUID.randomUUID();
                             Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
                             Destination destination = session.createQueue("eap.input");
                             MessageProducer producer = session.createProducer(destination);
                             MapMessage general_message = session.createMapMessage();
                             general_message.setString("latest_posts_user", input);
                             general_message.setStringProperty("type","generic");
-                            twitter = false;
+                            general_message.setStringProperty("messageID",uuid.toString());
+
+                        twitter = false;
                             if(general_reddit_sub){
                                 general_reddit_sub=false;
                                     general_message.setString("latest_posts_subreddit", reddit_subreddit);
@@ -150,6 +180,12 @@ public class telegramBot extends TelegramLongPollingBot {
                             general=false;
                             producer.send(general_message);
                             System.out.println("sent general message");
+                            Destination result_destination = session.createQueue("eap.output");
+                            MessageConsumer consumer = session.createConsumer(result_destination);
+                            connection.start();
+                            MapMessage result_message = (MapMessage)consumer.receive();
+                            session.close();
+                            System.out.println(result_message.getString("sentiment"));
 
                     }catch (Exception e) {
                         e.printStackTrace();
@@ -233,4 +269,19 @@ public class telegramBot extends TelegramLongPollingBot {
     }
 
 }
+    public static MapMessage receiveMessage(String queueName) {
+
+        try (Connection connection = factory.createConnection()) {
+            Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+            Destination destination = session.createQueue(queueName);
+            MessageConsumer consumer = session.createConsumer(destination);
+            javax.jms.Message message = consumer.receive();
+            return (MapMessage) message;
+        } catch (JMSRuntimeException | JMSException e) {
+            System.err.println(e.getMessage());
+            System.err.println(e.toString());
+        }
+        return null;
+    }
+
 }
