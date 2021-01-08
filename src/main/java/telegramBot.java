@@ -1,17 +1,28 @@
 import org.apache.activemq.artemis.api.jms.ActiveMQJMSClient;
 import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
 import org.apache.activemq.artemis.jms.client.ActiveMQJMSConnectionFactory;
+import org.json.JSONObject;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import javax.jms.*;
+import java.io.Serializable;
 
 public class telegramBot extends TelegramLongPollingBot {
 
     ConnectionFactory factory = new ActiveMQConnectionFactory("tcp://" + "127.0.0.1" + ":" + "61616", "artemis", "simetraehcapa");
     String keyword;
+    Boolean twitter=false;
+    Boolean reddit=false;
+    Boolean general=false;
+    Boolean reddit_user=false;
+    Boolean reddit_sub=false;
+    Boolean general_reddit_user=false;
+    Boolean general_reddit_sub=false;
+    String reddit_username;
+    String reddit_subreddit;
     public String getBotUsername() {
         return "Mitra_eap_bot";
     }
@@ -21,54 +32,9 @@ public class telegramBot extends TelegramLongPollingBot {
     }
 
     public void onUpdateReceived(Update update) {
-       // System.out.println(update.getMessage().getText());
         String input = update.getMessage().getText();
-        // System.out.println(update.getMessage().getFrom().getFirstName());
         if(input.equals("hello")) {
-            SendMessage startMessage = new SendMessage();
-            startMessage.setText("Hi!\nEnter the word on which you would like to perform sentiment analysis on");
-            startMessage.setChatId(String.valueOf(update.getMessage().getChatId()));
-            try {
-                execute(startMessage);
-            } catch (TelegramApiException e) {
-                e.printStackTrace();
-        }
-        }
-        else if(input.equals("1")){
-            try (Connection connection = factory.createConnection()) {
-                Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-                Queue twitterqueue = context.createQueue("eap.twitter_input.1");
-                JMSProducer producer = context.createProducer();
-               // MessageProducer producer = context.createProducer(twitterqueue);
-                //ObjectMessage message = session.createObjectMessage();
-                String textMessage = keyword;
-                TextMessage message = context.createTextMessage(textMessage);
-                producer.send(twitterqueue,message);
-                System.out.println("reached");
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-        else if(input.equals("2")){
-            try (Connection connection = factory.createConnection())) {
-                Queue redditqueue = context.createQueue("eap.reddit_input");
-                JMSProducer producer = context.createProducer();
-                // MessageProducer producer = context.createProducer(redditqueue);
-                //ObjectMessage message = session.createObjectMessage();
-                String textMessage = keyword;
-                TextMessage message = context.createTextMessage(textMessage);
-                producer.send(redditqueue,message);
-                System.out.println("reached");
-
-            } catch (JMSRuntimeException | JMSException | Exception e) {
-                e.printStackTrace();
-            }
-        }
-        else{
-            keyword = input;
             SendMessage choiceofPlatform = new SendMessage();
-
             choiceofPlatform.setText("Choose the platform to extract data from :\n 1. Twitter \n 2. Reddit \n 3. General");
             choiceofPlatform.setChatId(String.valueOf(update.getMessage().getChatId()));
             try {
@@ -76,13 +42,218 @@ public class telegramBot extends TelegramLongPollingBot {
             } catch (TelegramApiException e) {
                 e.printStackTrace();
             }
+        }
+        else if(reddit_user){
+
+                reddit_username = input;
+                reddit_user=false;
+            if(!general) {
+
+                try (Connection connection = factory.createConnection()) {
+                    Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+                    Destination destination = session.createQueue("eap.input");
+                    MessageProducer producer = session.createProducer(destination);
+                    MapMessage message = session.createMapMessage();
+                    message.setString("latest_posts_user", reddit_username);
+                    message.setJMSType("reddit");
+                    producer.send(message);
+                    System.out.println("reached");
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            else{
+
+                general_reddit_user=true;
+                twitter=true;
+                SendMessage generalgetTwitterdata = new SendMessage();
+                generalgetTwitterdata.setText("Enter the keyword to perform sentiment analysis on");
+                generalgetTwitterdata.setChatId(String.valueOf(update.getMessage().getChatId()));
+                try {
+                    execute(generalgetTwitterdata);
+                } catch (TelegramApiException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        else if(reddit_sub){
+
+                reddit_subreddit = input;
+            reddit_sub=false;
+            if(!general) {
+                try (Connection connection = factory.createConnection()) {
+                    Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+                    Destination destination = session.createQueue("eap.input");
+                    MessageProducer producer = session.createProducer(destination);
+                    MapMessage message = session.createMapMessage();
+                    message.setString("latest_posts_subreddit", reddit_subreddit);
+                    message.setJMSType("reddit");
+                    producer.send(message);
+                    System.out.println("reached");
+                    reddit_sub = false;
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            else{
+                reddit_subreddit = input;
+                general_reddit_sub=true;
+                twitter=true;
+                SendMessage generalgetTwitterdata = new SendMessage();
+                generalgetTwitterdata.setText("Enter the keyword to perform sentiment analysis on");
+                generalgetTwitterdata.setChatId(String.valueOf(update.getMessage().getChatId()));
+                try {
+                    execute(generalgetTwitterdata);
+                } catch (TelegramApiException e) {
+                    e.printStackTrace();
+                }
+
+            }
+        }
+        else if(twitter){
+            if(!general) {
+                try (Connection connection = factory.createConnection()) {
+                    Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+                    Destination destination = session.createQueue("eap.input");
+                    MessageProducer producer = session.createProducer(destination);
+                    MapMessage message = session.createMapMessage();
+                    message.setString("keyword", input);
+                    message.setJMSType("twitter");
+                    producer.send(message);
+                    System.out.println("reached");
+                    twitter = false;
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                System.out.println("Sent normal twitter");
+            }
+            else{
+                try (Connection connection = factory.createConnection()) {
+                    Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+                    Destination destination = session.createQueue("eap.input");
+                    MessageProducer producer = session.createProducer(destination);
+                    MapMessage twitter_message = session.createMapMessage();
+                    twitter_message.setString("keyword", input);
+                    twitter_message.setJMSType("twitter");
+                    producer.send(twitter_message);
+                    twitter = false;
+                }catch (Exception e) {
+                    e.printStackTrace();
+                }
+                if(general_reddit_sub){
+                    general_reddit_sub=false;
+                    try (Connection connection = factory.createConnection()) {
+                        Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+                        Destination destination = session.createQueue("eap.input");
+                        MessageProducer producer = session.createProducer(destination);
+                        MapMessage message = session.createMapMessage();
+                        message.setString("latest_posts_subreddit", reddit_subreddit);
+                        message.setJMSType("reddit");
+                        producer.send(message);
+                        System.out.println("reached reddit sub");
+                        reddit_sub = false;
+                        general=false;
+                    }catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                if(general_reddit_user){
+                    general_reddit_user=false;
+                        try (Connection connection = factory.createConnection()) {
+                            Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+                            Destination destination = session.createQueue("eap.input");
+                            MessageProducer producer = session.createProducer(destination);
+                            MapMessage message = session.createMapMessage();
+                            message.setString("latest_posts_user", reddit_username);
+                            message.setJMSType("reddit");
+                            producer.send(message);
+                            System.out.println("reached");
+                            general=false;
+
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                System.out.println("Sent three messages");
+                }
+            }
+
+
+        //User has selected twitter as desired platform
+        else if(input.equals("1")) {
+            twitter=true;
+            SendMessage twitterMessage = new SendMessage();
+            twitterMessage.setText("Enter the keyword to perform sentiment analysis on");
+            twitterMessage.setChatId(String.valueOf(update.getMessage().getChatId()));
+            try {
+                execute(twitterMessage);
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
+            }
+
 
         }
-        // message.setChatId(String.valueOf(update.getMessage().getChatId()));
-//        try {
-//            execute(message);
-//        } catch (TelegramApiException e) {
-//            e.printStackTrace();
-//        }
+        else if(input.equals("2")) {
+
+            SendMessage redditMessage = new SendMessage();
+            redditMessage.setText("Select desired option:\n a. Username  b. Subreddit?");
+            redditMessage.setChatId(String.valueOf(update.getMessage().getChatId()));
+            try {
+                execute(redditMessage);
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
+            }
+
+        }
+        else if(input.equals("3")) {
+            general=true;
+            SendMessage generalMessage = new SendMessage();
+            generalMessage.setText("Select desired option for Reddit:\n a. Username  b. Subreddit?");
+            generalMessage.setChatId(String.valueOf(update.getMessage().getChatId()));
+            try {
+                execute(generalMessage);
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
+            }
+
+        }
+        else if(input.equals("a"))
+        {
+
+                reddit_user = true;
+                SendMessage get_username = new SendMessage();
+                get_username.setText("Please enter the reddit username");
+                get_username.setChatId(String.valueOf(update.getMessage().getChatId()));
+                try {
+                    execute(get_username);
+                } catch (TelegramApiException e) {
+                    e.printStackTrace();
+                }
+
+
+
+            }
+
+
+        else if(input.equals("b"))
+        {
+            reddit_sub = true;
+            SendMessage get_subreddit = new SendMessage();
+            get_subreddit.setText("Please enter the reddit username");
+            get_subreddit.setChatId(String.valueOf(update.getMessage().getChatId()));
+            try {
+                execute(get_subreddit);
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
+            }
+
+
+        }
+        else{
+//
     }
+
+}
 }
