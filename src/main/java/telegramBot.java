@@ -15,7 +15,7 @@ public class telegramBot extends TelegramLongPollingBot {
     ConnectionFactory factory = new ActiveMQConnectionFactory("tcp://" + "127.0.0.1" + ":" + "61616", "artemis", "simetraehcapa");
     String keyword;
     Boolean twitter=false;
-    Boolean reddit=false;
+    //Boolean reddit=false;
     Boolean general=false;
     Boolean reddit_user=false;
     Boolean reddit_sub=false;
@@ -55,7 +55,7 @@ public class telegramBot extends TelegramLongPollingBot {
                     MessageProducer producer = session.createProducer(destination);
                     MapMessage message = session.createMapMessage();
                     message.setString("latest_posts_user", reddit_username);
-                    message.setJMSType("reddit");
+                    message.setStringProperty("type","reddit");
                     producer.send(message);
                     System.out.println("reached");
 
@@ -68,7 +68,7 @@ public class telegramBot extends TelegramLongPollingBot {
                 general_reddit_user=true;
                 twitter=true;
                 SendMessage generalgetTwitterdata = new SendMessage();
-                generalgetTwitterdata.setText("Enter the keyword to perform sentiment analysis on");
+                generalgetTwitterdata.setText("Enter the twitter handle:");
                 generalgetTwitterdata.setChatId(String.valueOf(update.getMessage().getChatId()));
                 try {
                     execute(generalgetTwitterdata);
@@ -89,7 +89,7 @@ public class telegramBot extends TelegramLongPollingBot {
                     MessageProducer producer = session.createProducer(destination);
                     MapMessage message = session.createMapMessage();
                     message.setString("latest_posts_subreddit", reddit_subreddit);
-                    message.setJMSType("reddit");
+                    message.setStringProperty("type","reddit");
                     producer.send(message);
                     System.out.println("reached");
                     reddit_sub = false;
@@ -102,7 +102,7 @@ public class telegramBot extends TelegramLongPollingBot {
                 general_reddit_sub=true;
                 twitter=true;
                 SendMessage generalgetTwitterdata = new SendMessage();
-                generalgetTwitterdata.setText("Enter the keyword to perform sentiment analysis on");
+                generalgetTwitterdata.setText("Enter the twitter handle:");
                 generalgetTwitterdata.setChatId(String.valueOf(update.getMessage().getChatId()));
                 try {
                     execute(generalgetTwitterdata);
@@ -119,8 +119,8 @@ public class telegramBot extends TelegramLongPollingBot {
                     Destination destination = session.createQueue("eap.input");
                     MessageProducer producer = session.createProducer(destination);
                     MapMessage message = session.createMapMessage();
-                    message.setString("keyword", input);
-                    message.setJMSType("twitter");
+                    message.setString("latest_posts_user", input);
+                   message.setStringProperty("type","twitter");
                     producer.send(message);
                     System.out.println("reached");
                     twitter = false;
@@ -130,53 +130,30 @@ public class telegramBot extends TelegramLongPollingBot {
                 System.out.println("Sent normal twitter");
             }
             else{
-                try (Connection connection = factory.createConnection()) {
-                    Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-                    Destination destination = session.createQueue("eap.input");
-                    MessageProducer producer = session.createProducer(destination);
-                    MapMessage twitter_message = session.createMapMessage();
-                    twitter_message.setString("keyword", input);
-                    twitter_message.setJMSType("twitter");
-                    producer.send(twitter_message);
-                    twitter = false;
-                }catch (Exception e) {
-                    e.printStackTrace();
-                }
-                if(general_reddit_sub){
-                    general_reddit_sub=false;
                     try (Connection connection = factory.createConnection()) {
-                        Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-                        Destination destination = session.createQueue("eap.input");
-                        MessageProducer producer = session.createProducer(destination);
-                        MapMessage message = session.createMapMessage();
-                        message.setString("latest_posts_subreddit", reddit_subreddit);
-                        message.setJMSType("reddit");
-                        producer.send(message);
-                        System.out.println("reached reddit sub");
-                        reddit_sub = false;
-                        general=false;
-                    }catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-                if(general_reddit_user){
-                    general_reddit_user=false;
-                        try (Connection connection = factory.createConnection()) {
                             Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
                             Destination destination = session.createQueue("eap.input");
                             MessageProducer producer = session.createProducer(destination);
-                            MapMessage message = session.createMapMessage();
-                            message.setString("latest_posts_user", reddit_username);
-                            message.setJMSType("reddit");
-                            producer.send(message);
-                            System.out.println("reached");
-                            general=false;
+                            MapMessage general_message = session.createMapMessage();
+                            general_message.setString("latest_posts_user", input);
+                            general_message.setStringProperty("type","generic");
+                            twitter = false;
+                            if(general_reddit_sub){
+                                general_reddit_sub=false;
+                                    general_message.setString("latest_posts_subreddit", reddit_subreddit);
 
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+                            }
+                            if(general_reddit_user){
+                                general_reddit_user=false;
+                                general_message.setString("latest_posts_user", reddit_username);
+                                }
+                            general=false;
+                            producer.send(general_message);
+                            System.out.println("sent general message");
+
+                    }catch (Exception e) {
+                        e.printStackTrace();
                     }
-                System.out.println("Sent three messages");
                 }
             }
 
@@ -185,7 +162,7 @@ public class telegramBot extends TelegramLongPollingBot {
         else if(input.equals("1")) {
             twitter=true;
             SendMessage twitterMessage = new SendMessage();
-            twitterMessage.setText("Enter the keyword to perform sentiment analysis on");
+            twitterMessage.setText("Enter the twitter handle:");
             twitterMessage.setChatId(String.valueOf(update.getMessage().getChatId()));
             try {
                 execute(twitterMessage);
